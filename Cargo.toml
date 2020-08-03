@@ -1,0 +1,8 @@
+[package]
+name = "sdl2_1"
+version = "0.1.0"
+authors = ["Asraelite <markusscully@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+sdl2 = "0.34.2"
