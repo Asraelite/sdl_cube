@@ -37,6 +37,6 @@ impl GameState {
 	}
 
 	pub fn tick(&mut self, input_state: &WindowInputState) {
-
+		self.world.tick(input_state);
 	}
 }

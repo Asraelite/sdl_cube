@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 // rng.gen_range(-5000..=5000) as f64;
 
+use super::window::{Keycode, WindowInputState};
+
 pub struct World {
 	frames: HashMap<FramePosition, Frame>,
 	entities: HashMap<EntityId, Entity>,
@@ -31,6 +33,24 @@ impl World {
 		world
 	}
 
+	pub fn tick(&mut self, input_state: &WindowInputState) {
+		let mut player =
+			self.get_entity_mut(self.focus_entity.unwrap()).unwrap();
+
+		let speed = 0.005;
+
+		for &keycode in input_state.keys_held.iter() {
+			use Keycode::*;
+			match keycode {
+				W => player.position.y -= speed,
+				S => player.position.y += speed,
+				A => player.position.x -= speed,
+				D => player.position.x += speed,
+				_ => {}
+			}
+		}
+	}
+
 	pub fn generate_id(&mut self) -> usize {
 		let current = self.iota;
 		self.iota += 1;
@@ -39,6 +59,17 @@ impl World {
 
 	pub fn get_entity(&self, entity_id: EntityId) -> Option<&Entity> {
 		self.entities.get(&entity_id)
+	}
+
+	pub fn entity_ids(&self) -> Vec<EntityId> {
+		self.entities.iter().map(|(_, ent)| ent.id).collect()
+	}
+
+	pub fn get_entity_mut(
+		&mut self,
+		entity_id: EntityId,
+	) -> Option<&mut Entity> {
+		self.entities.get_mut(&entity_id)
 	}
 
 	pub fn get_frame(&self, frame_position: FramePosition) -> Option<&Frame> {

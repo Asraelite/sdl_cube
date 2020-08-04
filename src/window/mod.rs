@@ -2,7 +2,7 @@ mod projection;
 
 use std::collections::HashSet;
 
-use sdl2::keyboard::Keycode;
+pub use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::render::Canvas;
 
@@ -22,10 +22,10 @@ pub struct Window {
 
 pub struct WindowInputState {
 	// Keyboard keys that started being pressed this frame
-	keys_pressed: HashSet<Keycode>,
+	pub keys_pressed: HashSet<Keycode>,
 	// Keyboard keys that have not yet been released, regardless of when
 	// they started being pressed.
-	keys_held: HashSet<Keycode>,
+	pub keys_held: HashSet<Keycode>,
 }
 
 impl WindowInputState {
@@ -141,7 +141,6 @@ impl Window {
 
 		let frame = world.get_frame(focus_position.frame).unwrap();
 
-
 		let mut r = Matrix4x4::identity();
 
 		//println!("{:?}", focus_position);
@@ -151,6 +150,41 @@ impl Window {
 		self.draw_frame(projector, &frame, Direction::Down, r);
 		self.draw_frame(projector, &frame, Direction::Left, r);
 		self.draw_frame(projector, &frame, Direction::Right, r);
+
+		for entity_id in world.entity_ids() {
+			let entity = world.get_entity(entity_id).unwrap();
+			let frame = entity.position.frame;
+			self.draw_entity(projector, entity, Direction::Neutral);
+		}
+	}
+
+	fn draw_entity(
+		&mut self,
+		projector: &CameraProjector,
+		entity: &Entity,
+		direction: Direction,
+	) {
+		let (mut rotate_pitch, mut rotate_roll) = match direction {
+			Direction::Neutral => (0.0, 0.0),
+			Direction::Up => (PI / 2.0, 0.0),
+			Direction::Down => (-PI / 2.0, 0.0),
+			Direction::Right => (0.0, PI / 2.0),
+			Direction::Left => (0.0, -PI / 2.0),
+			_ => (0.0, 0.0),
+		};
+
+		//rotate_pitch += (self.tick as f32 / 100.0);
+
+		let mut rotation_matrix =
+			Matrix4x4::identity().rotated(rotate_pitch, rotate_roll, 0.0);
+		let m = rotation_matrix;
+		let p = entity.position;
+		self.draw_line(
+			projector,
+			vec3(p.x, p.y - 0.01, 1.0) * m,
+			vec3(p.x, p.y + 0.01, 1.0) * m,
+			Color::CYAN,
+		);
 	}
 
 	fn draw_frame(
@@ -171,7 +205,7 @@ impl Window {
 			_ => (0.0, 0.0),
 		};
 
-		rotate_pitch += (self.tick as f32 / 100.0);
+		//rotate_pitch += (self.tick as f32 / 100.0);
 
 		let mut rotation_matrix =
 			Matrix4x4::identity().rotated(rotate_pitch, rotate_roll, 0.0);
