@@ -141,7 +141,14 @@ impl Window {
 
 		let frame = world.get_frame(focus_position.frame).unwrap();
 
-		let mut r = Matrix4x4::identity();
+		let focus_x = (focus_position.x).powf(2.0) * focus_position.x.signum();
+		let focus_y = (focus_position.y).powf(2.0) * focus_position.y.signum();
+
+		let r = vec3(
+			focus_y * (PI / 4.0),
+			focus_x * -(PI / 4.0),
+			0.0,
+		);
 
 		//println!("{:?}", focus_position);
 
@@ -154,7 +161,7 @@ impl Window {
 		for entity_id in world.entity_ids() {
 			let entity = world.get_entity(entity_id).unwrap();
 			let frame = entity.position.frame;
-			self.draw_entity(projector, entity, Direction::Neutral);
+			self.draw_entity(projector, entity, Direction::Neutral, r);
 		}
 	}
 
@@ -163,6 +170,7 @@ impl Window {
 		projector: &CameraProjector,
 		entity: &Entity,
 		direction: Direction,
+		rotation: Vector3,
 	) {
 		let (mut rotate_pitch, mut rotate_roll) = match direction {
 			Direction::Neutral => (0.0, 0.0),
@@ -175,14 +183,25 @@ impl Window {
 
 		//rotate_pitch += (self.tick as f32 / 100.0);
 
-		let mut rotation_matrix =
-			Matrix4x4::identity().rotated(rotate_pitch, rotate_roll, 0.0);
-		let m = rotation_matrix;
+		let mut direction_rotation = Matrix4x4::identity().rotated(
+			rotate_pitch,
+			rotate_roll,
+			0.0,
+		);
+
+		let view_rotation = Matrix4x4::identity().rotated(
+			rotation.x,
+			rotation.y,
+			rotation.z,
+		);
+
+		let m = direction_rotation;
+		let r = view_rotation;
 		let p = entity.position;
 		self.draw_line(
 			projector,
-			vec3(p.x, p.y - 0.01, 1.0) * m,
-			vec3(p.x, p.y + 0.01, 1.0) * m,
+			vec3(p.x, p.y - 0.01, 1.0) * m * r,
+			vec3(p.x, p.y + 0.01, 1.0) * m * r,
 			Color::CYAN,
 		);
 	}
@@ -192,7 +211,7 @@ impl Window {
 		projector: &CameraProjector,
 		frame: &Frame,
 		direction: Direction,
-		rotation: Matrix4x4,
+		rotation: Vector3,
 	) {
 		let color = Color::WHITE;
 
@@ -207,34 +226,42 @@ impl Window {
 
 		//rotate_pitch += (self.tick as f32 / 100.0);
 
-		let mut rotation_matrix =
-			Matrix4x4::identity().rotated(rotate_pitch, rotate_roll, 0.0);
+		let mut direction_rotation = Matrix4x4::identity().rotated(
+			rotate_pitch,
+			rotate_roll,
+			0.0,
+		);
 
-		rotation_matrix *= rotation;
+		let view_rotation = Matrix4x4::identity().rotated(
+			rotation.x,
+			rotation.y,
+			rotation.z,
+		);
 
-		let m = rotation_matrix;
+		let m = direction_rotation;
+		let r = view_rotation;
 		self.draw_line(
 			projector,
-			vec3(-1.0, -1.0, 1.0) * m,
-			vec3(1.0, -1.0, 1.0) * m,
+			vec3(-1.0, -1.0, 1.0) * m * r,
+			vec3(1.0, -1.0, 1.0) * m * r,
 			color,
 		);
 		self.draw_line(
 			projector,
-			vec3(1.0, -1.0, 1.0) * m,
-			vec3(1.0, 1.0, 1.0) * m,
+			vec3(1.0, -1.0, 1.0) * m * r,
+			vec3(1.0, 1.0, 1.0) * m * r,
 			color,
 		);
 		self.draw_line(
 			projector,
-			vec3(1.0, 1.0, 1.0) * m,
-			vec3(-1.0, 1.0, 1.0) * m,
+			vec3(1.0, 1.0, 1.0) * m * r,
+			vec3(-1.0, 1.0, 1.0) * m * r,
 			color,
 		);
 		self.draw_line(
 			projector,
-			vec3(-1.0, 1.0, 1.0) * m,
-			vec3(-1.0, -1.0, 1.0) * m,
+			vec3(-1.0, 1.0, 1.0) * m * r,
+			vec3(-1.0, -1.0, 1.0) * m * r,
 			color,
 		);
 	}

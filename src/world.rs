@@ -37,7 +37,7 @@ impl World {
 		let mut player =
 			self.get_entity_mut(self.focus_entity.unwrap()).unwrap();
 
-		let speed = 0.005;
+		let speed = 0.02;
 
 		for &keycode in input_state.keys_held.iter() {
 			use Keycode::*;
