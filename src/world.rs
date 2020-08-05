@@ -1,8 +1,13 @@
 use std::collections::HashMap;
 
-// rng.gen_range(-5000..=5000) as f64;
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 
+use super::geometry::Vector3;
 use super::window::{Keycode, WindowInputState};
+
+pub const FRAME_WIDTH: usize = 16;
+const FRAME_TILE_COUNT: usize = FRAME_WIDTH * FRAME_WIDTH;
 
 pub struct World {
 	frames: HashMap<FramePosition, Frame>,
@@ -20,7 +25,7 @@ impl World {
 			iota: 0,
 		};
 
-		let start_frame = Frame::new();
+		let start_frame = Frame::new_populated();
 		let start_frame_position = FramePosition::new(0, 0);
 		world.frames.insert(start_frame_position, start_frame);
 
@@ -38,6 +43,8 @@ impl World {
 			self.get_entity_mut(self.focus_entity.unwrap()).unwrap();
 
 		let speed = 0.02;
+
+		let mut movement = Vector3::zero();
 
 		for &keycode in input_state.keys_held.iter() {
 			use Keycode::*;
@@ -92,9 +99,6 @@ impl FramePosition {
 	}
 }
 
-pub const FRAME_WIDTH: usize = 128;
-const FRAME_TILE_COUNT: usize = FRAME_WIDTH * FRAME_WIDTH;
-
 #[derive(Copy, Clone, PartialEq)]
 pub enum Tile {
 	Empty,
@@ -139,6 +143,34 @@ impl Frame {
 			tiles: [Tile::Empty; FRAME_TILE_COUNT],
 			borders,
 		}
+	}
+
+	pub fn tile(&self, x: usize, y: usize) -> &Tile {
+		&self.tiles[y * FRAME_WIDTH + x]
+	}
+
+	pub fn tile_mut(&mut self, x: usize, y: usize) -> &mut Tile {
+		&mut self.tiles[y * FRAME_WIDTH + x]
+	}
+
+	pub fn new_populated() -> Self {
+		let mut frame = Self::new();
+
+		let mut rng = rand::thread_rng();
+
+		for x in 0..FRAME_WIDTH {
+			for y in 0..FRAME_WIDTH {
+				let tile = match rng.gen_range(1, 100) {
+					1..=15 => Tile::Solid,
+					16..=100 => Tile::Empty,
+					_ => panic!(),
+				};
+
+				*frame.tile_mut(x, y) = tile;
+			}
+		}
+
+		frame
 	}
 }
 

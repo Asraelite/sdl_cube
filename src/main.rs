@@ -4,9 +4,6 @@ mod geometry;
 mod window;
 mod world;
 
-// use rand::rngs::StdRng;
-// use rand::{Rng, SeedableRng};
-
 use geometry::{Scalar, Vector3};
 use window::{Window, WindowInputState};
 use world::World;

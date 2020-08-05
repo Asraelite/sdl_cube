@@ -5,8 +5,9 @@ use std::collections::HashSet;
 pub use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::render::Canvas;
+use sdl2::rect::Point as SdlPoint;
 
-use super::world::{Direction, Entity, Frame, World};
+use super::world::{Direction, Entity, Frame, Tile, World, FRAME_WIDTH};
 use super::GameState;
 use crate::geometry::{vec3, Matrix4x4, Vector3, PI};
 
@@ -80,6 +81,14 @@ impl Window {
 			match event {
 				Quit { .. } => self.should_exit = true,
 				KeyDown {
+					keycode: Some(Keycode::Q),
+					..
+				}
+				| KeyDown {
+					keycode: Some(Keycode::Escape),
+					..
+				} => self.should_exit = true,
+				KeyDown {
 					keycode: Some(keycode),
 					..
 				} => self.input_state.key_down_event(keycode),
@@ -141,14 +150,12 @@ impl Window {
 
 		let frame = world.get_frame(focus_position.frame).unwrap();
 
-		let focus_x = (focus_position.x).powf(2.0) * focus_position.x.signum();
-		let focus_y = (focus_position.y).powf(2.0) * focus_position.y.signum();
+		let focus_x =
+			focus_position.x.abs().powf(1.5) * focus_position.x.signum();
+		let focus_y =
+			focus_position.y.abs().powf(1.5) * focus_position.y.signum();
 
-		let r = vec3(
-			focus_y * (PI / 4.0),
-			focus_x * -(PI / 4.0),
-			0.0,
-		);
+		let r = vec3(focus_y * (PI / 4.0), focus_x * -(PI / 4.0), 0.0);
 
 		//println!("{:?}", focus_position);
 
@@ -183,17 +190,11 @@ impl Window {
 
 		//rotate_pitch += (self.tick as f32 / 100.0);
 
-		let mut direction_rotation = Matrix4x4::identity().rotated(
-			rotate_pitch,
-			rotate_roll,
-			0.0,
-		);
+		let mut direction_rotation =
+			Matrix4x4::identity().rotated(rotate_pitch, rotate_roll, 0.0);
 
-		let view_rotation = Matrix4x4::identity().rotated(
-			rotation.x,
-			rotation.y,
-			rotation.z,
-		);
+		let view_rotation =
+			Matrix4x4::identity().rotated(rotation.x, rotation.y, rotation.z);
 
 		let m = direction_rotation;
 		let r = view_rotation;
@@ -226,72 +227,109 @@ impl Window {
 
 		//rotate_pitch += (self.tick as f32 / 100.0);
 
-		let mut direction_rotation = Matrix4x4::identity().rotated(
-			rotate_pitch,
-			rotate_roll,
-			0.0,
-		);
+		let mut direction_rotation =
+			Matrix4x4::identity().rotated(rotate_pitch, rotate_roll, 0.0);
 
-		let view_rotation = Matrix4x4::identity().rotated(
-			rotation.x,
-			rotation.y,
-			rotation.z,
-		);
+		let view_rotation =
+			Matrix4x4::identity().rotated(rotation.x, rotation.y, rotation.z);
 
 		let m = direction_rotation;
 		let r = view_rotation;
-		self.draw_line(
+		self.draw_rect(
 			projector,
 			vec3(-1.0, -1.0, 1.0) * m * r,
 			vec3(1.0, -1.0, 1.0) * m * r,
-			color,
-		);
-		self.draw_line(
-			projector,
-			vec3(1.0, -1.0, 1.0) * m * r,
-			vec3(1.0, 1.0, 1.0) * m * r,
-			color,
-		);
-		self.draw_line(
-			projector,
 			vec3(1.0, 1.0, 1.0) * m * r,
 			vec3(-1.0, 1.0, 1.0) * m * r,
 			color,
 		);
-		self.draw_line(
+
+		let f = 1.0 / FRAME_WIDTH as f32;
+		for x in 0..FRAME_WIDTH {
+			for y in 0..FRAME_WIDTH {
+				let mut o = vec3(
+					(x as f32 / FRAME_WIDTH as f32 * 2.0),
+					(y as f32 / FRAME_WIDTH as f32 * 2.0),
+					0.0,
+				);
+				o = o - vec3(1.0, 1.0, 0.0);
+				//let o = Vector3::zero();
+
+				match *frame.tile(x, y) {
+					Tile::Solid => self.draw_rect(
+						projector,
+						(vec3(0.0 * f, 0.0 * f, 1.08) + o) * m * r,
+						(vec3(2.0 * f, 0.0 * f, 1.08) + o) * m * r,
+						(vec3(2.0 * f, 2.0 * f, 1.08) + o) * m * r,
+						(vec3(0.0 * f, 2.0 * f, 1.08) + o) * m * r,
+						color,
+					),
+					_ => {}
+				}
+			}
+		}
+
+		self.canvas.draw_line((10, 10), (12, 12));
+		//self.canvas.draw_line((10, 12), (12, 12));
+	}
+
+	fn draw_rect(
+		&mut self,
+		projector: &CameraProjector,
+		top_left: Vector3,
+		top_right: Vector3,
+		bottom_right: Vector3,
+		bottom_left: Vector3,
+		color: Color,
+	) {
+		// self.draw_line(projector, top_left, top_right, color);
+		// self.draw_line(projector, top_right, bottom_right, color);
+		// self.draw_line(projector, bottom_right, bottom_left, color);
+		// self.draw_line(projector, bottom_left, top_left, color);
+		self.draw_lines(
 			projector,
-			vec3(-1.0, 1.0, 1.0) * m * r,
-			vec3(-1.0, -1.0, 1.0) * m * r,
+			&[top_left, top_right, bottom_right],
+			color,
+		);
+		self.draw_lines(
+			projector,
+			&[top_left, bottom_left, bottom_right],
 			color,
 		);
 	}
 
-	// fn draw_rect(&mut self, corner_a: Vector3, corner_b: Vector3, matrix: Matrix4x4) {
-	// 	self.draw_line(
-	// 		projector,
-	// 		vec3(-1.0, -1.0, 1.0),
-	// 		vec3(1.0, -1.0, 1.0),
-	// 		color,
-	// 	);
-	// 	self.draw_line(
-	// 		projector,
-	// 		vec3(1.0, -1.0, 1.0),
-	// 		vec3(1.0, 1.0, 1.0),
-	// 		color,
-	// 	);
-	// 	self.draw_line(
-	// 		projector,
-	// 		vec3(1.0, 1.0, 1.0),
-	// 		vec3(-1.0, 1.0, 1.0),
-	// 		color,
-	// 	);
-	// 	self.draw_line(
-	// 		projector,
-	// 		vec3(-1.0, 1.0, 1.0),
-	// 		vec3(-1.0, -1.0, 1.0),
-	// 		color,
-	// 	);
-	// }
+	fn draw_lines(
+		&mut self,
+		projector: &CameraProjector,
+		points: &[Vector3],
+		color: Color,
+	) {
+		let projected_points: Vec<sdl2::rect::Point> = points
+			.iter()
+			.map(|point| {
+				// Magnify for debugging. `* 100.0` should be removed eventually.
+				let (x, y, depth) = projector.project_point(*point * 100.0);
+				let (x, y) = (x.round() as i32, y.round() as i32);
+				//println!("{} {} <- {:?}", x, y, point);
+				let sdl_point: sdl2::rect::Point = (x, y).into();
+
+				// if (start_depth > 1.0 && end_depth > 1.0)
+				// 	|| (start_depth < 0.0 && end_depth < 0.0)
+				// {
+				// 	return;
+				// }
+				sdl_point
+			})
+			.collect();
+		//println!("---");
+		// .filter(|&(_, _, depth, _)| depth > -1.0 && depth < 1.0)
+		// .filter(|&(x, y, _, _)| x > 0 && y > 0)
+		// .filter(|&(x, y, _, _)| x < viewport_width && y < viewport_height)
+
+		self.canvas.set_draw_color(color);
+		self.canvas.draw_lines(projected_points.as_slice());
+		//self.canvas.draw_line(end_point, start_point);
+	}
 
 	fn draw_line(
 		&mut self,
@@ -300,27 +338,6 @@ impl Window {
 		end: Vector3,
 		color: Color,
 	) {
-		// Magnify for debugging. Remove these two lines eventually.
-		let start = start * 100.0;
-		let end = end * 100.0;
-
-		let (start_x, start_y, start_depth) = projector.project_point(start);
-		let (start_x, start_y) = (start_x as i32, start_y as i32);
-		let start_point: sdl2::rect::Point = (start_x, start_y).into();
-		let (end_x, end_y, end_depth) = projector.project_point(end);
-		let (end_x, end_y) = (end_x as i32, end_y as i32);
-		let end_point: sdl2::rect::Point = (end_x, end_y).into();
-
-		if (start_depth > 1.0 && end_depth > 1.0)
-			|| (start_depth < 0.0 && end_depth < 0.0)
-		{
-			return;
-		}
-		// .filter(|&(_, _, depth, _)| depth > -1.0 && depth < 1.0)
-		// .filter(|&(x, y, _, _)| x > 0 && y > 0)
-		// .filter(|&(x, y, _, _)| x < viewport_width && y < viewport_height)
-
-		self.canvas.set_draw_color(color);
-		self.canvas.draw_line(start_point, end_point);
+		self.draw_lines(projector, &[start, end], color);
 	}
 }
