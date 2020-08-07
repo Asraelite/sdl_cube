@@ -4,8 +4,8 @@ use std::collections::HashSet;
 
 pub use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
-use sdl2::render::Canvas;
 use sdl2::rect::Point as SdlPoint;
+use sdl2::render::Canvas;
 
 use super::world::{Direction, Entity, Frame, Tile, World, FRAME_WIDTH};
 use super::GameState;
@@ -19,6 +19,7 @@ pub struct Window {
 	input_state: WindowInputState,
 	pub should_exit: bool,
 	tick: usize,
+	debug: (isize, isize),
 }
 
 pub struct WindowInputState {
@@ -38,8 +39,11 @@ impl WindowInputState {
 	}
 
 	pub fn key_down_event(&mut self, keycode: Keycode) {
-		self.keys_held.insert(keycode);
-		self.keys_pressed.insert(keycode);
+		// SDL triggers this event on a key long-press, so handle that case.
+		if self.keys_held.contains(&keycode) == false {
+			self.keys_held.insert(keycode);
+			self.keys_pressed.insert(keycode);
+		}
 	}
 
 	pub fn key_up_event(&mut self, keycode: Keycode) {
@@ -70,6 +74,7 @@ impl Window {
 			input_state: WindowInputState::new(),
 			should_exit: false,
 			tick: 0,
+			debug: (0, 0),
 		}
 	}
 
@@ -150,14 +155,16 @@ impl Window {
 
 		let frame = world.get_frame(focus_position.frame).unwrap();
 
+		let debug_tile_pos = world.tile_index_at_entity(focus_entity.id);
+		self.debug = debug_tile_pos;
+		//let debug_tile = frame.tile_mut(debug_tile_pos.0, debug_tile_pos.1);
+
 		let focus_x =
 			focus_position.x.abs().powf(1.5) * focus_position.x.signum();
 		let focus_y =
 			focus_position.y.abs().powf(1.5) * focus_position.y.signum();
 
 		let r = vec3(focus_y * (PI / 4.0), focus_x * -(PI / 4.0), 0.0);
-
-		//println!("{:?}", focus_position);
 
 		self.draw_frame(projector, &frame, Direction::Neutral, r);
 		self.draw_frame(projector, &frame, Direction::Up, r);
@@ -255,16 +262,28 @@ impl Window {
 				o = o - vec3(1.0, 1.0, 0.0);
 				//let o = Vector3::zero();
 
-				match *frame.tile(x, y) {
-					Tile::Solid => self.draw_rect(
+				let mut will_render = match *frame.tile(x as isize, y as isize) {
+					Tile::Solid => true,
+					_ => false,
+				};
+
+				//println!("{:?}", self.debug);
+				// let color = if (x, y) == self.debug {
+				// 	will_render = true;
+				// 	Color::RED
+				// } else {
+				// 	color
+				// };
+
+				if will_render {
+					self.draw_rect(
 						projector,
-						(vec3(0.0 * f, 0.0 * f, 1.08) + o) * m * r,
-						(vec3(2.0 * f, 0.0 * f, 1.08) + o) * m * r,
-						(vec3(2.0 * f, 2.0 * f, 1.08) + o) * m * r,
-						(vec3(0.0 * f, 2.0 * f, 1.08) + o) * m * r,
+						(vec3(0.0 * f, 0.0 * f, 1.00) + o) * m * r,
+						(vec3(2.0 * f, 0.0 * f, 1.00) + o) * m * r,
+						(vec3(2.0 * f, 2.0 * f, 1.00) + o) * m * r,
+						(vec3(0.0 * f, 2.0 * f, 1.00) + o) * m * r,
 						color,
-					),
-					_ => {}
+					);
 				}
 			}
 		}
@@ -286,11 +305,7 @@ impl Window {
 		// self.draw_line(projector, top_right, bottom_right, color);
 		// self.draw_line(projector, bottom_right, bottom_left, color);
 		// self.draw_line(projector, bottom_left, top_left, color);
-		self.draw_lines(
-			projector,
-			&[top_left, top_right, bottom_right],
-			color,
-		);
+		self.draw_lines(projector, &[top_left, top_right, bottom_right], color);
 		self.draw_lines(
 			projector,
 			&[top_left, bottom_left, bottom_right],
@@ -310,7 +325,6 @@ impl Window {
 				// Magnify for debugging. `* 100.0` should be removed eventually.
 				let (x, y, depth) = projector.project_point(*point * 100.0);
 				let (x, y) = (x.round() as i32, y.round() as i32);
-				//println!("{} {} <- {:?}", x, y, point);
 				let sdl_point: sdl2::rect::Point = (x, y).into();
 
 				// if (start_depth > 1.0 && end_depth > 1.0)
@@ -321,7 +335,6 @@ impl Window {
 				sdl_point
 			})
 			.collect();
-		//println!("---");
 		// .filter(|&(_, _, depth, _)| depth > -1.0 && depth < 1.0)
 		// .filter(|&(x, y, _, _)| x > 0 && y > 0)
 		// .filter(|&(x, y, _, _)| x < viewport_width && y < viewport_height)
