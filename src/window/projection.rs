@@ -2,6 +2,7 @@ use crate::geometry;
 
 use geometry::{Matrix4x4, Scalar, Vector3};
 
+#[derive(Copy, Clone)]
 pub struct Camera {
 	pub position: Vector3,
 	pub rotation: Vector3,
@@ -45,7 +46,7 @@ impl Camera {
 			viewport_width,
 			viewport_height,
 		);
-		CameraProjector::new(pmv_matrix, viewport_width, viewport_height)
+		CameraProjector::new(pmv_matrix, viewport_width, viewport_height, *self)
 	}
 }
 
@@ -53,6 +54,7 @@ pub struct CameraProjector {
 	pmv_matrix: Matrix4x4,
 	viewport_width: Scalar,
 	viewport_height: Scalar,
+	pub camera: Camera,
 }
 
 impl CameraProjector {
@@ -60,28 +62,28 @@ impl CameraProjector {
 		pmv_matrix: Matrix4x4,
 		viewport_width: Scalar,
 		viewport_height: Scalar,
+		camera: Camera,
 	) -> Self {
 		Self {
 			pmv_matrix,
 			viewport_width,
 			viewport_height,
+			camera,
 		}
 	}
 
-	#[inline(always)]
 	pub fn project_point(&self, point: Vector3) -> (Scalar, Scalar, Scalar) {
-		//println!("{:?}", pmv_matrix);
-
-		// println!("Using: {:?}", pmv_matrix);
-		// println!("Point: {:?}", point);
 		let projected_position = point * self.pmv_matrix;
-		// println!("->     {:?}", projected_position);
 
 		let (px, py) = (projected_position.x, projected_position.y);
 		let hw = self.viewport_width / 2.0;
 		let hh = self.viewport_height / 2.0;
 
 		(px * hw + hw, py * hh + hh, projected_position.z)
+	}
+
+	pub fn apply_projection_matrix(&self, point: Vector3) -> Vector3 {
+		point * self.pmv_matrix
 	}
 }
 

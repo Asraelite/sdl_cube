@@ -9,9 +9,11 @@ use sdl2::render::Canvas;
 
 use super::world::{Direction, Entity, Frame, Tile, World, FRAME_WIDTH};
 use super::GameState;
-use crate::geometry::{vec3, Matrix4x4, Vector3, PI};
+use crate::geometry::{self, vec3, Matrix4x4, Vector3, PI};
 
 use projection::{Camera, CameraProjector};
+
+const DEBUG_0: usize = 60;
 
 pub struct Window {
 	sdl: sdl2::Sdl,
@@ -86,10 +88,6 @@ impl Window {
 			match event {
 				Quit { .. } => self.should_exit = true,
 				KeyDown {
-					keycode: Some(Keycode::Q),
-					..
-				}
-				| KeyDown {
 					keycode: Some(Keycode::Escape),
 					..
 				} => self.should_exit = true,
@@ -242,14 +240,17 @@ impl Window {
 
 		let m = direction_rotation;
 		let r = view_rotation;
-		self.draw_rect(
-			projector,
-			vec3(-1.0, -1.0, 1.0) * m * r,
-			vec3(1.0, -1.0, 1.0) * m * r,
-			vec3(1.0, 1.0, 1.0) * m * r,
-			vec3(-1.0, 1.0, 1.0) * m * r,
-			color,
-		);
+
+		let p1 = vec3(-1.0, -1.0, 1.0) * m * r;
+		let p2 = vec3(1.0, -1.0, 1.0) * m * r;
+		let p3 = vec3(1.0, 1.0, 1.0) * m * r;
+		let p4 = vec3(-1.0, 1.0, 1.0) * m * r;
+
+		if self.is_rect_visible(projector, p1, p2, p3, p4) == false {
+			return;
+		}
+
+		self.draw_rect(projector, p1, p2, p3, p4, color);
 
 		let f = 1.0 / FRAME_WIDTH as f32;
 		for x in 0..FRAME_WIDTH {
@@ -262,7 +263,8 @@ impl Window {
 				o = o - vec3(1.0, 1.0, 0.0);
 				//let o = Vector3::zero();
 
-				let mut will_render = match *frame.tile(x as isize, y as isize) {
+				let mut will_render = match *frame.tile(x as isize, y as isize)
+				{
 					Tile::Solid => true,
 					_ => false,
 				};
@@ -313,6 +315,21 @@ impl Window {
 		);
 	}
 
+	fn is_rect_visible(
+		&self,
+		projector: &CameraProjector,
+		top_left: Vector3,
+		top_right: Vector3,
+		bottom_right: Vector3,
+		bottom_left: Vector3,
+	) -> bool {
+		let p1 = projector.apply_projection_matrix(top_left * 100.0);
+		let p2 = projector.apply_projection_matrix(top_right * 100.0);
+		let p3 = projector.apply_projection_matrix(bottom_right * 100.0);
+		let normal = geometry::normal(p1, p2, p3);
+		normal.z >= 0.0
+	}
+
 	fn draw_lines(
 		&mut self,
 		projector: &CameraProjector,
@@ -324,6 +341,7 @@ impl Window {
 			.map(|point| {
 				// Magnify for debugging. `* 100.0` should be removed eventually.
 				let (x, y, depth) = projector.project_point(*point * 100.0);
+				//let (x, y) = (point.x * 100.0 + 200.0, point.y * 100.0 + 200.0);
 				let (x, y) = (x.round() as i32, y.round() as i32);
 				let sdl_point: sdl2::rect::Point = (x, y).into();
 

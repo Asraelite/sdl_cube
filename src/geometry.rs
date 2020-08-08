@@ -55,6 +55,10 @@ impl Vector3 {
 		let rotation_matrix = Matrix4x4::identity().rotated(x, y, z);
 		*self * rotation_matrix
 	}
+
+	pub fn dot(&self, other: Vector3) -> Scalar {
+		self.x * other.x + self.y * other.y + self.z * other.z
+	}
 }
 
 pub fn vec3(x: Scalar, y: Scalar, z: Scalar) -> Vector3 {
@@ -135,6 +139,14 @@ impl Neg for Vector3 {
 		self * -1.0
 	}
 }
+
+impl std::fmt::Display for Vector3 {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "vec3 {{ {:8.5}, {:8.5}, {:8.5} }}", self.x, self.y, self.z)?;
+		Ok(())
+	}
+}
+
 
 #[derive(Copy, Clone)]
 pub struct Matrix4x4 {
@@ -262,3 +274,18 @@ impl std::fmt::Debug for Matrix4x4 {
 		Ok(())
 	}
 }
+
+pub fn normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3 {
+	let v = b - a;
+	let w = c - a;
+
+	let normal_x = (v.y * w.z) - (v.z * w.y);
+	let normal_y = (v.z * w.x) - (v.x * w.z);
+	let normal_z = (v.x * w.y) - (v.y * w.x);
+
+	Vector3::new(normal_x, normal_y, normal_z).normalized()
+}
+
+// pub fn clockwise(a: Vector3, b: Vector3, c: Vector3) -> bool {
+	
+// }

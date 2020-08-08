@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
-use super::geometry::{vec3, Vector3};
+use super::geometry::{self, vec3, Vector3};
 use super::window::{Keycode, WindowInputState};
 
 pub const FRAME_WIDTH: usize = 16;
@@ -94,6 +94,7 @@ impl World {
 				_ => {}
 			}
 		}
+		
 		for id in self.entity_ids() {
 			self.move_entity(id);
 		}
