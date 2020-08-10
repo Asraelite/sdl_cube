@@ -81,6 +81,12 @@ impl World {
 				D => {
 					self.impulse_entity(player_id, vec3(speed, 0.0, 0.0));
 				}
+				W => {
+					self.impulse_entity(player_id, vec3(0.0, -speed, 0.0));
+				}
+				S => {
+					self.impulse_entity(player_id, vec3(0.0, speed, 0.0));
+				}
 				_ => {}
 			}
 		}
@@ -91,10 +97,25 @@ impl World {
 				W => {
 					self.jump_entity(player_id);
 				}
+				E => {
+					let entity = self.get_entity(player_id).unwrap();
+					let mut position = entity.position;
+					let (ex, ey) = self.tile_index_at_position(position);
+					let (tx, ty) = (ex + 1, ey);
+					let frame = self.get_frame_mut(position.frame).unwrap();
+					*frame.tile_mut(tx, ty) = Tile::Solid;
+				}
+				Q => {
+					let entity = self.get_entity(player_id).unwrap();
+					let mut position = entity.position;
+					let (ex, ey) = self.tile_index_at_position(position);
+					let (tx, ty) = (ex + 1, ey);
+					let frame = self.get_frame_mut(position.frame).unwrap();
+					*frame.tile_mut(tx, ty) = Tile::Empty;
+				}
 				_ => {}
 			}
 		}
-		
 		for id in self.entity_ids() {
 			self.move_entity(id);
 		}
@@ -111,20 +132,23 @@ impl World {
 		let step_vector = entity.velocity / iterations;
 		let last_direction_x = entity.last_movement_direction_x;
 		let last_direction_y = entity.last_movement_direction_y;
+		let last_direction = entity.last_movement_direction;
 
-		let mut direction_x = match step_vector.x {
+		let direction_x = match step_vector.x {
 			dx if dx == 0.0 => Direction::Neutral,
 			dx if dx > 0.0 => Direction::Right,
 			dx if dx < 0.0 => Direction::Left,
 			_ => panic!("NaN velocity vector component, {:?}", step_vector),
 		};
+		let mut set_direction_x = direction_x;
 
-		let mut direction_y = match step_vector.y {
+		let direction_y = match step_vector.y {
 			dy if dy == 0.0 => Direction::Neutral,
 			dy if dy > 0.0 => Direction::Down,
 			dy if dy < 0.0 => Direction::Up,
 			_ => panic!("NaN velocity vector component, {:?}", step_vector),
 		};
+		let mut set_direction_y = direction_y;
 
 		let f = FRAME_WIDTH as f32 / 2.0;
 		let mut position = entity.position;
@@ -144,23 +168,41 @@ impl World {
 				end_contacts.as_tuple(),
 				last_direction_x,
 				last_direction_y,
+				last_direction,
 			) {
-				(Right, (true, true, _, _), (_, _, _, true), _, _) => true,
-				(Right, (true, _, _, _), (_, _, _, true), Right, _) => true,
-				(Right, (true, _, _, _), (_, _, _, true), _, Up) => true,
-				(Right, (_, _, true, true), (_, true, _, _), _, _) => true,
-				(Right, (_, _, true, _), (_, true, _, _), Right, _) => true,
-				(Right, (_, _, true, _), (_, true, _, _), _, Down) => true,
-				(Right, _, (_, true, _, true), _, _) => true,
+				(Right, (true, true, _, _), (_, _, _, true), _, _, _) => true,
+				(Right, (true, _, _, _), (_, _, _, true), _, _, Right) => true,
+				(Right, (true, _, _, _), (_, _, _, true), _, _, Up) => true,
+				(Right, (_, _, true, true), (_, true, _, _), _, _, _) => true,
+				(Right, (_, _, true, _), (_, true, _, _), _, _, Down) => true,
+				(Right, (_, _, true, _), (_, true, _, _), _, _, Right) => true,
+				(Right, _, (_, true, _, true), _, _, _) => true,
 
-				(Left, (true, true, _, _), (_, _, true, _), _, _) => true,
-				(Left, (_, true, _, _), (_, _, true, _), Left, _) => true,
-				(Left, (_, true, _, _), (_, _, true, _), _, Up) => true,
-				(Left, (_, _, true, true), (true, _, _, _), _, _) => true,
-				(Left, (_, _, _, true), (true, _, _, _), Left, _) => true,
-				(Left, (_, _, _, true), (true, _, _, _), _, Down) => true,
-				(Left, _, (true, _, true, _), _, _) => true,
+				(Left, (true, true, _, _), (_, _, true, _), _, _, _) => true,
+				(Left, (_, true, _, _), (_, _, true, _), _, _, Left) => true,
+				(Left, (_, true, _, _), (_, _, true, _), _, _, Up) => true,
+				(Left, (_, _, true, true), (true, _, _, _), _, _, _) => true,
+				(Left, (_, _, _, true), (true, _, _, _), _, _, Left) => true,
+				(Left, (_, _, _, true), (true, _, _, _), _, _, Down) => true,
+				(Left, _, (true, _, true, _), _, _, _) => true,
 
+				/*
+				(Right, (true, true, _, _), (_, _, _, true), _, _, _) => true,
+				(Right, (true, _, _, _), (_, _, _, true), Right, _, _) => true,
+				(Right, (true, _, _, _), (_, _, _, true), _, Up, _) => true,
+				(Right, (_, _, true, true), (_, true, _, _), _, _, _) => true,
+				(Right, (_, _, true, _), (_, true, _, _), Right, _, _) => true,
+				(Right, (_, _, true, _), (_, true, _, _), _, Down, _) => true,
+				(Right, _, (_, true, _, true), _, _, _) => true,
+
+				(Left, (true, true, _, _), (_, _, true, _), _, _, _) => true,
+				(Left, (_, true, _, _), (_, _, true, _), Left, _, _) => true,
+				(Left, (_, true, _, _), (_, _, true, _), _, Up, _) => true,
+				(Left, (_, _, true, true), (true, _, _, _), _, _, _) => true,
+				(Left, (_, _, _, true), (true, _, _, _), Left, _, _) => true,
+				(Left, (_, _, _, true), (true, _, _, _), _, Down, _) => true,
+				(Left, _, (true, _, true, _), _, _, _) => true,
+				*/
 				_ => false,
 			};
 
@@ -172,7 +214,7 @@ impl World {
 				}
 				velocity.x = 0.0;
 			} else {
-				direction_x = last_direction_x;
+				set_direction_x = last_direction_x;
 			}
 
 			let start_contacts = self.point_contacts(position);
@@ -184,19 +226,42 @@ impl World {
 				start_contacts.as_tuple(),
 				end_contacts.as_tuple(),
 				last_direction_y,
+				last_direction_x,
+				last_direction,
 			) {
-				(Down, (_, true, _, true), (_, _, true, _), _) => true,
-				(Down, (_, true, _, _), (_, _, true, _), Down) => true,
-				(Down, (true, _, true, _), (_, _, _, true), _) => true,
-				(Down, (true, _, _, _), (_, _, _, true), Down) => true,
-				(Down, _, (_, _, true, true), _) => true,
+				(Down, (_, true, _, true), (_, _, true, _), _, _, _) => true,
+				(Down, (_, true, _, _), (_, _, true, _), _, _, Down) => true,
+				(Down, (_, true, _, _), (_, _, true, _), _, _, Right) => true,
+				(Down, (true, _, true, _), (_, _, _, true), _, _, _) => true,
+				(Down, (true, _, _, _), (_, _, _, true), _, _, Down) => true,
+				(Down, (true, _, _, _), (_, _, _, true), _, _, Left) => true,
+				(Down, _, (_, _, true, true), _, _, _) => true,
 
-				(Up, (_, true, _, true), (true, _, _, _), _) => true,
-				(Up, (_, _, _, true), (true, _, _, _), Up) => true,
-				(Up, (true, _, true, _), (_, true, _, _), _) => true,
-				(Up, (_, _, true, _), (_, true, _, _), Up) => true,
-				(Up, _, (true, true, _, _), _) => true,
+				(Up, (_, true, _, true), (true, _, _, _), _, _, _) => true,
+				(Up, (_, _, _, true), (true, _, _, _), _, _, Up) => true,
+				(Up, (_, _, _, true), (true, _, _, _), _, _, Right) => true,
+				(Up, (true, _, true, _), (_, true, _, _), _, _, _) => true,
+				(Up, (_, _, true, _), (_, true, _, _), _, _, Up) => true,
+				(Up, (_, _, true, _), (_, true, _, _), _, _, Left) => true,
+				(Up, _, (true, true, _, _), _, _, _) => true,
 
+				/*
+				(Down, (_, true, _, true), (_, _, true, _), _, _, _,) => true,
+				(Down, (_, true, _, _), (_, _, true, _), Down, _, _,) => true,
+				(Down, (_, true, _, _), (_, _, true, _), _, Right, _,) => true,
+				(Down, (true, _, true, _), (_, _, _, true), _, _, _,) => true,
+				(Down, (true, _, _, _), (_, _, _, true), Down, _, _,) => true,
+				(Down, (true, _, _, _), (_, _, _, true), _, Left, _,) => true,
+				(Down, _, (_, _, true, true), _, _, _) => true,
+
+				(Up, (_, true, _, true), (true, _, _, _), _, _, _,) => true,
+				(Up, (_, _, _, true), (true, _, _, _), Up, _, _,) => true,
+				(Up, (_, _, _, true), (true, _, _, _), _, Right, _,) => true,
+				(Up, (true, _, true, _), (_, true, _, _), _, _, _,) => true,
+				(Up, (_, _, true, _), (_, true, _, _), Up, _, _,) => true,
+				(Up, (_, _, true, _), (_, true, _, _), _, Left, _,) => true,
+				(Up, _, (true, true, _, _), _, _, _) => true,
+				*/
 				_ => false,
 			};
 
@@ -211,7 +276,7 @@ impl World {
 				}
 				velocity.y = 0.0;
 			} else {
-				direction_y = last_direction_y;
+				set_direction_y = last_direction_y;
 			}
 
 			// 		position.x = (position.x * f).floor() / f;
@@ -283,13 +348,32 @@ impl World {
 		let entity = self.get_entity_mut(id).unwrap();
 		entity.position = position;
 		entity.velocity = velocity;
-		entity.last_movement_direction_x = direction_x;
-		entity.last_movement_direction_y = direction_y;
+		entity.last_movement_direction_x = set_direction_x;
+		entity.last_movement_direction_y = set_direction_y;
+
+		// If the entity moved along both x and y this frame, y gets
+		// priority.
+		entity.last_movement_direction = match (direction_x, direction_y) {
+			(Direction::Neutral, Direction::Neutral) => {
+				entity.last_movement_direction
+			}
+			(x, Direction::Neutral) => x,
+			(_, y) => y,
+		};
+
 		entity.grounded = grounded;
 
 		// Air friction and gravity.
 		entity.velocity.x *= 0.8;
-		entity.velocity.y += 0.0004;
+		entity.velocity.y *= 0.8;
+
+		if entity.velocity.x.abs() < 0.00001 {
+			entity.velocity.x = 0.0;
+		}
+		if entity.velocity.y.abs() < 0.00001 {
+			entity.velocity.y = 0.0;
+		}
+		//entity.velocity.y += 0.0004;
 	}
 
 	pub fn tile_at_entity(&self, id: EntityId) -> Tile {
@@ -573,6 +657,7 @@ pub struct WorldPosition {
 pub struct Entity {
 	pub position: WorldPosition,
 	pub velocity: Vector3,
+	pub last_movement_direction: Direction,
 	pub last_movement_direction_x: Direction,
 	pub last_movement_direction_y: Direction,
 	pub kind: EntityKind,
@@ -602,6 +687,7 @@ impl Entity {
 		Self {
 			position,
 			velocity: Vector3::zero(),
+			last_movement_direction: Direction::Neutral,
 			last_movement_direction_x: Direction::Neutral,
 			last_movement_direction_y: Direction::Neutral,
 			kind: EntityKind::Player,
