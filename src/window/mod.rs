@@ -14,6 +14,7 @@ use crate::geometry::{self, vec3, Matrix4x4, Vector3, PI};
 use projection::{Camera, CameraProjector};
 
 const DEBUG_0: usize = 60;
+const THREE_D_TILES: bool = false;
 
 pub struct Window {
 	sdl: sdl2::Sdl,
@@ -113,7 +114,7 @@ impl Window {
 		self.canvas.clear();
 
 		let projector = {
-			let position = Vector3::new(0.0, 0.0, 300.0);
+			let position = Vector3::new(0.0, 0.0, 240.0);
 			let rotation = Vector3::new(0.0, 0.0, 0.0);
 			let fov_degrees = 50.0;
 			let camera = Camera::new(position, rotation, fov_degrees);
@@ -126,11 +127,6 @@ impl Window {
 		};
 
 		self.render_cube(&projector, game_state);
-
-		// let red = Color::RED;
-		// let from = Vector3::new(-5.0, 20.0, 0.0);
-		// let to = Vector3::new(30.0, -10.0, 5.0);
-		// self.draw_line(&projector, from, to, red);
 
 		self.canvas.present();
 	}
@@ -151,11 +147,8 @@ impl Window {
 		let focus_entity = world.get_entity(focus_entity_id).unwrap();
 		let focus_position = focus_entity.position;
 
-		let frame = world.get_frame(focus_position.frame).unwrap();
-
-		let debug_tile_pos = world.tile_index_at_entity(focus_entity.id);
-		self.debug = debug_tile_pos;
-		//let debug_tile = frame.tile_mut(debug_tile_pos.0, debug_tile_pos.1);
+		// let debug_tile_pos = world.tile_index_at_entity(focus_entity.id);
+		// self.debug = debug_tile_pos;
 
 		let focus_x =
 			focus_position.x.abs().powf(1.5) * focus_position.x.signum();
@@ -164,11 +157,22 @@ impl Window {
 
 		let r = vec3(focus_y * (PI / 4.0), focus_x * -(PI / 4.0), 0.0);
 
-		self.draw_frame(projector, &frame, Direction::Neutral, r);
-		self.draw_frame(projector, &frame, Direction::Up, r);
-		self.draw_frame(projector, &frame, Direction::Down, r);
-		self.draw_frame(projector, &frame, Direction::Left, r);
-		self.draw_frame(projector, &frame, Direction::Right, r);
+		let focus_frame = world.get_frame(focus_position.frame).unwrap();
+		let neighbors = focus_frame.borders;
+
+		for &direction in Direction::iter() {
+			let neighbor = neighbors.at_direction(direction);
+			if let Some(neighbor) = neighbor {
+				let frame = world.get_frame(neighbor).unwrap();
+				self.draw_frame(projector, &frame, direction, r);
+			}
+		}
+
+		// self.draw_frame(projector, &frame, Direction::Neutral, r);
+		// self.draw_frame(projector, &frame, Direction::Up, r);
+		// self.draw_frame(projector, &frame, Direction::Down, r);
+		// self.draw_frame(projector, &frame, Direction::Left, r);
+		// self.draw_frame(projector, &frame, Direction::Right, r);
 
 		for entity_id in world.entity_ids() {
 			let entity = world.get_entity(entity_id).unwrap();
@@ -206,8 +210,8 @@ impl Window {
 		let p = entity.position;
 		self.draw_line(
 			projector,
-			vec3(p.x, p.y - 0.01, 1.0) * m * r,
-			vec3(p.x, p.y + 0.01, 1.0) * m * r,
+			vec3(p.x, p.y - 0.01, 1.00) * m * r,
+			vec3(p.x, p.y + 0.01, 1.00) * m * r,
 			Color::CYAN,
 		);
 	}
@@ -250,7 +254,7 @@ impl Window {
 			return;
 		}
 
-		self.draw_rect(projector, p1, p2, p3, p4, color);
+		//self.draw_rect(projector, p1, p2, p3, p4, color);
 
 		let f = 1.0 / FRAME_WIDTH as f32;
 		for x in 0..FRAME_WIDTH {
@@ -277,7 +281,56 @@ impl Window {
 				// 	color
 				// };
 
-				if will_render {
+				if will_render && THREE_D_TILES {
+					// depth
+					let d = 0.08;
+					// front
+					self.draw_rect(
+						projector,
+						(vec3(0.0 * f, 0.0 * f, 1.00 + d) + o) * m * r,
+						(vec3(2.0 * f, 0.0 * f, 1.00 + d) + o) * m * r,
+						(vec3(2.0 * f, 2.0 * f, 1.00 + d) + o) * m * r,
+						(vec3(0.0 * f, 2.0 * f, 1.00 + d) + o) * m * r,
+						color,
+					);
+					// top
+					self.draw_rect(
+						projector,
+						(vec3(0.0 * f, 0.0 * f, 1.00) + o) * m * r,
+						(vec3(2.0 * f, 0.0 * f, 1.00) + o) * m * r,
+						(vec3(2.0 * f, 0.0 * f, 1.00 + d) + o) * m * r,
+						(vec3(0.0 * f, 0.0 * f, 1.00 + d) + o) * m * r,
+						color,
+					);
+					// left
+					self.draw_rect(
+						projector,
+						(vec3(0.0 * f, 0.0 * f, 1.00) + o) * m * r,
+						(vec3(0.0 * f, 0.0 * f, 1.00 + d) + o) * m * r,
+						(vec3(0.0 * f, 2.0 * f, 1.00 + d) + o) * m * r,
+						(vec3(0.0 * f, 2.0 * f, 1.00) + o) * m * r,
+						color,
+					);
+					// bottom
+					self.draw_rect(
+						projector,
+						(vec3(0.0 * f, 2.0 * f, 1.00 + d) + o) * m * r,
+						(vec3(2.0 * f, 2.0 * f, 1.00 + d) + o) * m * r,
+						(vec3(2.0 * f, 2.0 * f, 1.00) + o) * m * r,
+						(vec3(0.0 * f, 2.0 * f, 1.00) + o) * m * r,
+						color,
+					);
+					// right
+					self.draw_rect(
+						projector,
+						(vec3(2.0 * f, 0.0 * f, 1.00 + d) + o) * m * r,
+						(vec3(2.0 * f, 0.0 * f, 1.00) + o) * m * r,
+						(vec3(2.0 * f, 2.0 * f, 1.00) + o) * m * r,
+						(vec3(2.0 * f, 2.0 * f, 1.00 + d) + o) * m * r,
+
+						color,
+					);
+				} else if will_render {
 					self.draw_rect(
 						projector,
 						(vec3(0.0 * f, 0.0 * f, 1.00) + o) * m * r,
@@ -303,10 +356,15 @@ impl Window {
 		bottom_left: Vector3,
 		color: Color,
 	) {
-		// self.draw_line(projector, top_left, top_right, color);
-		// self.draw_line(projector, top_right, bottom_right, color);
-		// self.draw_line(projector, bottom_right, bottom_left, color);
-		// self.draw_line(projector, bottom_left, top_left, color);
+		let p1 = top_left;
+		let p2 = top_right;
+		let p3 = bottom_right;
+		let p4 = bottom_left;
+
+		if self.is_rect_visible(projector, p1, p2, p3, p4) == false {
+			return;
+		}
+
 		self.draw_lines(projector, &[top_left, top_right, bottom_right], color);
 		self.draw_lines(
 			projector,
