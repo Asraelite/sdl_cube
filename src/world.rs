@@ -54,6 +54,26 @@ impl Direction {
 		use Direction::*;
 		[Up, Down, Left, Right, Neutral].iter()
 	}
+
+	pub fn rotated(&self, turns: isize) -> Self {
+		use Direction::*;
+		match (*self, turns.rem_euclid(4)) {
+			(current, 0) => current,
+			(Up, 1) => Right,
+			(Up, 2) => Down,
+			(Up, 3) => Left,
+			(Right, 1) => Down,
+			(Right, 2) => Left,
+			(Right, 3) => Up,
+			(Down, 1) => Left,
+			(Down, 2) => Up,
+			(Down, 3) => Right,
+			(Left, 1) => Up,
+			(Left, 2) => Right,
+			(Left, 3) => Down,
+			_ => unreachable!(),
+		}
+	}
 }
 
 pub struct World {
@@ -72,18 +92,48 @@ impl World {
 			iota: 0,
 		};
 
-		let start_frame = Frame::new_populated(FramePosition::new(0, 0));
+		let start_frame = Frame::new_populated(FramePosition::new(0));
 		let start_frame_position = start_frame.position;
 		world.frames.insert(start_frame.position, start_frame);
 
-		let test_frame = Frame::new_populated(FramePosition::new(1, 0));
-		let test_frame_position = test_frame.position;
-		world.frames.insert(test_frame.position, test_frame);
+		let u_test_frame = Frame::new_populated(FramePosition::new(69));
+		let u_test_frame_position = u_test_frame.position;
+		world.frames.insert(u_test_frame.position, u_test_frame);
+
+		let d_test_frame = Frame::new_populated(FramePosition::new(711));
+		let d_test_frame_position = d_test_frame.position;
+		world.frames.insert(d_test_frame.position, d_test_frame);
+
+		let r_test_frame = Frame::new_populated(FramePosition::new(420));
+		let r_test_frame_position = r_test_frame.position;
+		world.frames.insert(r_test_frame.position, r_test_frame);
 
 		world.attach_frame(
 			start_frame_position,
-			test_frame_position,
+			u_test_frame_position,
+			Direction::Up,
+			Direction::Down,
+		);
+
+		world.attach_frame(
+			start_frame_position,
+			r_test_frame_position,
 			Direction::Right,
+			Direction::Left,
+		);
+
+		world.attach_frame(
+			r_test_frame_position,
+			u_test_frame_position,
+			Direction::Up,
+			Direction::Right,
+		);
+
+		world.attach_frame(
+			start_frame_position,
+			d_test_frame_position,
+			Direction::Down,
+			Direction::Up,
 		);
 
 		let player = Entity::new_player(&mut world, start_frame_position);
@@ -129,16 +179,18 @@ impl World {
 					let entity = self.get_entity(player_id).unwrap();
 					let mut position = entity.position;
 					let (ex, ey) = self.tile_index_at_position(position);
-					let (tx, ty) = (ex + 1, ey);
-					let frame = self.get_frame_mut(position.frame).unwrap();
+					let (tile_frame_position, tx, ty) =
+						self.normalize_tile_index(position.frame, ex + 1, ey);
+					let frame = self.get_frame_mut(tile_frame_position).unwrap();
 					*frame.tile_mut(tx, ty) = Tile::Solid;
 				}
 				Q => {
 					let entity = self.get_entity(player_id).unwrap();
 					let mut position = entity.position;
 					let (ex, ey) = self.tile_index_at_position(position);
-					let (tx, ty) = (ex + 1, ey);
-					let frame = self.get_frame_mut(position.frame).unwrap();
+					let (tile_frame_position, tx, ty) =
+						self.normalize_tile_index(position.frame, ex + 1, ey);
+					let frame = self.get_frame_mut(tile_frame_position).unwrap();
 					*frame.tile_mut(tx, ty) = Tile::Empty;
 				}
 				_ => {}
@@ -436,13 +488,14 @@ impl World {
 			None => {
 				eprintln!("Could not access tile index's real frame:");
 				eprintln!(
-					"{:?}/({},{}) @ {:?}",
+					"{}/({},{}) -> {:?}",
 					origin_frame_position, x, y, direction
 				);
-				eprintln!("selecting from {:?}", borders);
+				eprintln!("selecting from {}", borders);
 				panic!("Tile index access error");
 			}
-		};
+		}
+		.frame;
 
 		(real_frame_position, real_x, real_y)
 	}
@@ -475,7 +528,6 @@ impl World {
 		let is_solid = |x, y| {
 			let (tile_frame_pos, wrapped_x, wrapped_y) =
 				self.normalize_tile_index(position.frame, x, y);
-			//tile.is_solid()
 			let tile_frame = self.get_frame(tile_frame_pos).unwrap();
 			let tile = tile_frame.tile(wrapped_x, wrapped_y);
 			tile.is_solid()
@@ -568,7 +620,8 @@ impl World {
 				eprintln!("selecting from {:?}", borders);
 				panic!("Frame neighbor access error");
 			}
-		};
+		}
+		.frame;
 
 		// let real_frame_position = match borders.at_direction(direction) {
 		// 	Some(p) => p,
@@ -588,52 +641,63 @@ impl World {
 		&mut self,
 		parent: FramePosition,
 		child: FramePosition,
-		direction: Direction,
+		parent_edge: Direction,
+		child_edge: Direction,
 	) {
 		let parent_frame = self.get_frame_mut(parent).unwrap();
-		let border = parent_frame.borders.at_direction_mut(direction);
+		let border = parent_frame.borders.at_direction_mut(parent_edge);
 		if border.is_some() {
-			panic!(
-				"Attempt to attach to non-empty parent frame border:\n\
-				[{:?}] <- {:?} @ {:?}",
-				parent, child, direction
+			eprintln!(
+				"Attempt to create link to non-empty parent frame border:\n\
+				<{}>@{:?} <- {}@{:?}\n\
+				parent has: {}",
+				parent, parent_edge, child, child_edge, parent_frame.borders,
 			);
+			panic!("Non-empty frame border attachment");
 		}
-		*border = Some(child);
-
-		let direction = direction.reverse();
+		*border = Some(FrameLink {
+			frame: child,
+			entry_edge: child_edge,
+		});
 		let child_frame = self.get_frame_mut(child).unwrap();
-		let border = child_frame.borders.at_direction_mut(direction);
+		let border = child_frame.borders.at_direction_mut(child_edge);
 		if border.is_some() {
-			panic!(
-				"Attempt to attach to non-empty child frame border:\n\
-				{:?} <- [{:?}] @ {:?}",
-				parent, child, direction
+			eprintln!(
+				"Attempt to create link to non-empty child frame border:\n\
+				<{}>@{:?} <- {}@{:?}\n\
+				child has: {}",
+				parent, parent_edge, child, child_edge, child_frame.borders,
 			);
+			panic!("Non-empty frame border attachment");
 		}
-		*border = Some(parent);
+		*border = Some(FrameLink {
+			frame: parent,
+			entry_edge: parent_edge,
+		});
 	}
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct EntityId(usize);
 
+// TODO: Rename to FrameId
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct FramePosition {
-	pub x: usize,
-	pub y: usize,
+pub struct FramePosition(usize);
+
+impl std::fmt::Display for FramePosition {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "[{}]", self.0)?;
+		Ok(())
+	}
 }
 
 impl FramePosition {
-	pub fn new(x: usize, y: usize) -> Self {
-		Self { x, y }
+	pub fn new(inner: usize) -> Self {
+		Self(inner)
 	}
 
 	pub fn invalid() -> Self {
-		Self {
-			x: std::usize::MAX,
-			y: std::usize::MAX,
-		}
+		Self(std::usize::MAX)
 	}
 }
 
@@ -656,16 +720,48 @@ impl Tile {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct FrameBorders {
-	up: Option<FramePosition>,
-	down: Option<FramePosition>,
-	left: Option<FramePosition>,
-	right: Option<FramePosition>,
-	neutral: Option<FramePosition>,
+pub struct FrameLinks {
+	up: Option<FrameLink>,
+	down: Option<FrameLink>,
+	left: Option<FrameLink>,
+	right: Option<FrameLink>,
+	neutral: Option<FrameLink>,
 }
 
-impl FrameBorders {
-	pub fn at_direction(&self, direction: Direction) -> Option<FramePosition> {
+impl std::fmt::Display for FrameLinks {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let inner_string = [
+			(/*"←"*/ Direction::Left, self.left),
+			(/*"→"*/ Direction::Right, self.right),
+			(/*"↑"*/ Direction::Up, self.up),
+			(/*"↓"*/ Direction::Down, self.down),
+		]
+		.iter()
+		.filter(|(_, value)| value.is_some())
+		.map(|(symbol, value)| format!("{:?}:{}", symbol, value.unwrap().frame))
+		.collect::<Vec<String>>()
+		.join(", ");
+
+		write!(f, "links( {} )", inner_string)?;
+		Ok(())
+	}
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct FrameLink {
+	pub frame: FramePosition,
+	pub entry_edge: Direction,
+}
+
+impl std::fmt::Display for FrameLink {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "~({}@{:?})", self.frame, self.entry_edge)?;
+		Ok(())
+	}
+}
+
+impl FrameLinks {
+	pub fn at_direction(&self, direction: Direction) -> Option<FrameLink> {
 		use Direction::*;
 		match direction {
 			Up => self.up,
@@ -679,7 +775,7 @@ impl FrameBorders {
 	pub fn at_direction_mut(
 		&mut self,
 		direction: Direction,
-	) -> &mut Option<FramePosition> {
+	) -> &mut Option<FrameLink> {
 		use Direction::*;
 		match direction {
 			Up => &mut self.up,
@@ -694,18 +790,22 @@ impl FrameBorders {
 pub struct Frame {
 	tiles: [Tile; FRAME_TILE_COUNT],
 	invalid_tile: Tile,
-	pub borders: FrameBorders,
+	pub borders: FrameLinks,
 	pub position: FramePosition,
+	pub orientation: Direction,
 }
 
 impl Frame {
 	pub fn new(position: FramePosition) -> Self {
-		let borders = FrameBorders {
+		let borders = FrameLinks {
 			up: None,
 			down: None,
 			left: None,
 			right: None,
-			neutral: Some(position),
+			neutral: Some(FrameLink {
+				frame: position,
+				entry_edge: Direction::Neutral,
+			}),
 		};
 
 		Self {
@@ -713,6 +813,7 @@ impl Frame {
 			invalid_tile: Tile::Invalid,
 			borders,
 			position,
+			orientation: Direction::Neutral,
 		}
 	}
 
@@ -746,8 +847,8 @@ impl Frame {
 		for x in 0..FRAME_WIDTH {
 			for y in 0..FRAME_WIDTH {
 				let tile = match rng.gen_range(1, 100) {
-					1..=25 => Tile::Solid,
-					26..=100 => Tile::Empty,
+					1..=17 => Tile::Solid,
+					18..=100 => Tile::Empty,
 					_ => panic!(),
 				};
 

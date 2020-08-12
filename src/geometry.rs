@@ -142,11 +142,14 @@ impl Neg for Vector3 {
 
 impl std::fmt::Display for Vector3 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "vec3 {{ {:8.5}, {:8.5}, {:8.5} }}", self.x, self.y, self.z)?;
+		write!(
+			f,
+			"vec3 {{ {:8.5}, {:8.5}, {:8.5} }}",
+			self.x, self.y, self.z
+		)?;
 		Ok(())
 	}
 }
-
 
 #[derive(Copy, Clone)]
 pub struct Matrix4x4 {
@@ -168,6 +171,10 @@ impl Matrix4x4 {
 		]);
 	}
 
+	pub fn rotation(x: Scalar, y: Scalar, z: Scalar) -> Self {
+		Self::identity().rotated(x, y, z)
+	}
+
 	pub fn from_values(values: [Scalar; 16]) -> Self {
 		Self { values }
 	}
@@ -180,6 +187,7 @@ impl Matrix4x4 {
 		&mut self.values[i * 4 + j]
 	}
 
+	// Euler rotations
 	pub fn rotated(&self, x: Scalar, y: Scalar, z: Scalar) -> Self {
 		#[rustfmt::skip]
 		let x_rot_matrix = Matrix4x4::from_values([
@@ -204,6 +212,38 @@ impl Matrix4x4 {
 		]);
 
 		*self * x_rot_matrix * y_rot_matrix * z_rot_matrix
+	}
+
+	// See https://en.wikipedia.org/wiki/Rotation_matrix
+	// #Rotation_matrix_from_axis_and_angle
+	pub fn rotated_about_axis(&self, axis: Vector3, angle: Scalar) -> Self {
+		let Vector3 { x, y, z } = axis;
+		let a = angle;
+
+		let rotation_matrix = Matrix4x4::from_values([
+			// top row
+			a.cos() + x.powi(2) * (1.0 - a.cos()),
+			x * y * (1.0 - a.cos()) - z * a.sin(),
+			x * z * (1.0 - a.cos()) + y * a.sin(),
+			0.0,
+			// middle row
+			x * y * (1.0 - a.cos()) + z * a.sin(),
+			a.cos() + y.powi(2) * (1.0 - a.cos()),
+			y * z * (1.0 - a.cos()) - x * a.sin(),
+			0.0,
+			// bottom row
+			x * z * (1.0 - a.cos()) - y * a.sin(),
+			y * z * (1.0 - a.cos()) + x * a.sin(),
+			a.cos() + z.powi(2) * (1.0 - a.cos()),
+			0.0,
+			// homogenous coordinates row
+			0.0,
+			0.0,
+			0.0,
+			1.0,
+		]);
+
+		*self * rotation_matrix
 	}
 
 	pub fn transposed(&self) -> Self {
@@ -243,9 +283,8 @@ impl Mul for Matrix4x4 {
 
 		for i in 0..4 {
 			for j in 0..4 {
-				let cell_value = (0..4)
-					.map(|k| self.at(i, k) * rhs.at(k, j))
-					.sum::<Scalar>();
+				let cell_value: Scalar =
+					(0..4).map(|k| self.at(i, k) * rhs.at(k, j)).sum();
 				*output.at_mut(i, j) = cell_value;
 			}
 		}
@@ -287,5 +326,4 @@ pub fn normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3 {
 }
 
 // pub fn clockwise(a: Vector3, b: Vector3, c: Vector3) -> bool {
-	
 // }
