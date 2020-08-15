@@ -1,15 +1,16 @@
+pub mod types;
+mod backend;
 mod projection;
 
 use std::collections::HashSet;
 
-pub use sdl2::keyboard::Keycode;
-use sdl2::pixels::Color;
-use sdl2::rect::Point as SdlPoint;
-use sdl2::render::Canvas;
+use backend::Backend;
 
 use super::world::{Direction, Entity, Frame, Tile, World, FRAME_WIDTH};
 use super::GameState;
 use crate::geometry::{self, vec3, Matrix4x4, Vector3, PI};
+
+pub use types::*;
 
 use projection::{Camera, CameraProjector};
 
@@ -17,15 +18,14 @@ const DEBUG_0: usize = 60;
 const THREE_D_TILES: bool = false;
 
 pub struct Window {
-	sdl: sdl2::Sdl,
-	canvas: Canvas<sdl2::video::Window>,
-	input_state: WindowInputState,
+	backend: Backend,
+	input_state: InputState,
 	pub should_exit: bool,
 	tick: usize,
 	debug: (isize, isize),
 }
 
-pub struct WindowInputState {
+pub struct InputState {
 	// Keyboard keys that started being pressed this frame
 	pub keys_pressed: HashSet<Keycode>,
 	// Keyboard keys that have not yet been released, regardless of when
@@ -33,7 +33,7 @@ pub struct WindowInputState {
 	pub keys_held: HashSet<Keycode>,
 }
 
-impl WindowInputState {
+impl InputState {
 	pub fn new() -> Self {
 		Self {
 			keys_pressed: HashSet::new(),
@@ -62,19 +62,9 @@ impl WindowInputState {
 
 impl Window {
 	pub fn new() -> Self {
-		let sdl = sdl2::init().unwrap();
-		let video_subsystem = sdl.video().unwrap();
-		let window = video_subsystem
-			.window("cube", 900, 700)
-			.resizable()
-			.build()
-			.unwrap();
-		let mut canvas = window.into_canvas().present_vsync().build().unwrap();
-
 		Self {
-			sdl,
-			canvas,
-			input_state: WindowInputState::new(),
+			backend: Backend::new(),
+			input_state: InputState::new(),
 			should_exit: false,
 			tick: 0,
 			debug: (0, 0),
@@ -82,24 +72,13 @@ impl Window {
 	}
 
 	pub fn tick(&mut self, game_state: &mut GameState) {
-		let mut event_pump = self.sdl.event_pump().unwrap();
-
-		for event in event_pump.poll_iter() {
-			use sdl2::event::Event::*;
+		while let Some(event) = self.backend.poll_event() {
+			use WindowEvent::*;
 			match event {
 				Quit { .. } => self.should_exit = true,
-				KeyDown {
-					keycode: Some(Keycode::Escape),
-					..
-				} => self.should_exit = true,
-				KeyDown {
-					keycode: Some(keycode),
-					..
-				} => self.input_state.key_down_event(keycode),
-				KeyUp {
-					keycode: Some(keycode),
-					..
-				} => self.input_state.key_up_event(keycode),
+				KeyDown(Keycode::Escape) => self.should_exit = true,
+				KeyDown(keycode) => self.input_state.key_down_event(keycode),
+				KeyUp(keycode) => self.input_state.key_up_event(keycode),
 				_ => {}
 			}
 		}
@@ -110,8 +89,7 @@ impl Window {
 	}
 
 	pub fn render(&mut self, game_state: &mut GameState) {
-		self.canvas.set_draw_color(Color::RGB(0, 0, 0));
-		self.canvas.clear();
+		self.backend.clear_canvas();
 
 		let projector = {
 			let position = Vector3::new(0.0, 0.0, 240.0);
@@ -119,16 +97,15 @@ impl Window {
 			let fov_degrees = 50.0;
 			let camera = Camera::new(position, rotation, fov_degrees);
 
-			let viewport_rect = self.canvas.viewport();
-			let viewport_width = viewport_rect.width() as f32;
-			let viewport_height = viewport_rect.height() as f32;
+			let viewport_width = self.backend.viewport_width() as f32;
+			let viewport_height = self.backend.viewport_width() as f32;
 
 			camera.projector(viewport_width, viewport_height)
 		};
 
 		self.render_cube(&projector, game_state);
 
-		self.canvas.present();
+		self.backend.update_canvas();
 	}
 
 	fn render_cube(
@@ -195,7 +172,6 @@ impl Window {
 			let p = vec3(focus_x, focus_y, 1.0).normalized();
 			view_rotation.rotated_about_axis(p, twist)
 		};
-		
 		type DrawFrameFn =
 			fn(&mut Window, &CameraProjector, &Frame, Direction, Matrix4x4);
 
@@ -420,8 +396,8 @@ impl Window {
 			}
 		}
 
-		self.canvas.draw_line((10, 10), (12, 12));
-		//self.canvas.draw_line((10, 12), (12, 12));
+		self.backend.draw_line((10.0, 10.0), (12.0, 12.0));
+		//self.backend.draw_line((10, 12), (12, 12));
 	}
 
 	fn draw_rect(
@@ -472,30 +448,18 @@ impl Window {
 		points: &[Vector3],
 		color: Color,
 	) {
-		let projected_points: Vec<sdl2::rect::Point> = points
+		let projected_points: Vec<(f32, f32)> = points
 			.iter()
 			.map(|point| {
 				// Magnify for debugging. `* 100.0` should be removed eventually.
 				let (x, y, depth) = projector.project_point(*point * 100.0);
-				//let (x, y) = (point.x * 100.0 + 200.0, point.y * 100.0 + 200.0);
-				let (x, y) = (x.round() as i32, y.round() as i32);
-				let sdl_point: sdl2::rect::Point = (x, y).into();
-
-				// if (start_depth > 1.0 && end_depth > 1.0)
-				// 	|| (start_depth < 0.0 && end_depth < 0.0)
-				// {
-				// 	return;
-				// }
-				sdl_point
+				(x, y)
 			})
 			.collect();
-		// .filter(|&(_, _, depth, _)| depth > -1.0 && depth < 1.0)
-		// .filter(|&(x, y, _, _)| x > 0 && y > 0)
-		// .filter(|&(x, y, _, _)| x < viewport_width && y < viewport_height)
 
-		self.canvas.set_draw_color(color);
-		self.canvas.draw_lines(projected_points.as_slice());
-		//self.canvas.draw_line(end_point, start_point);
+		self.backend.set_draw_color(color);
+		self.backend.draw_lines(projected_points.as_slice());
+		//self.backend.draw_line(end_point, start_point);
 	}
 
 	fn draw_line(

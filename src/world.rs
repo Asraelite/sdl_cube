@@ -4,7 +4,8 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
 use super::geometry::{self, vec3, Vector3};
-use super::window::{Keycode, WindowInputState};
+use super::window::InputState;
+use super::window::{Color, Keycode};
 
 pub const FRAME_WIDTH: usize = 16;
 pub const TILE_SIZE: f32 = 2.0 / FRAME_WIDTH as f32;
@@ -145,7 +146,7 @@ impl World {
 		world
 	}
 
-	pub fn tick(&mut self, input_state: &WindowInputState) {
+	pub fn tick(&mut self, input_state: &InputState) {
 		let player_id = self.focus_entity.unwrap();
 
 		let speed = 0.002;

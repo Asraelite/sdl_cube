@@ -5,7 +5,7 @@ mod window;
 mod world;
 
 use geometry::{Scalar, Vector3};
-use window::{Window, WindowInputState};
+use window::{Window, InputState};
 use world::World;
 
 fn main() {
@@ -33,7 +33,7 @@ impl GameState {
 		 }
 	}
 
-	pub fn tick(&mut self, input_state: &WindowInputState) {
+	pub fn tick(&mut self, input_state: &InputState) {
 		self.world.tick(input_state);
 	}
 }
