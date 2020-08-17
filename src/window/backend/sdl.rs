@@ -5,7 +5,36 @@ use sdl2::pixels::Color as SdlColor;
 use sdl2::rect::Point as SdlPoint;
 use sdl2::render::Canvas;
 
-use super::super::{Color, Keycode, WindowEvent};
+use super::super::{Color, Keycode, WindowEvent, Window};
+use super::super::super::GameState;
+
+pub fn begin_loop(
+	mut window: Window,
+	mut game_state: GameState,
+	closure: impl Fn(&mut Window, &mut GameState),
+) {
+	loop {
+		closure(&mut window, &mut game_state);
+		if window.should_exit {
+			break;
+		}
+	}
+}
+
+pub mod external_exports {}
+
+pub mod random {
+	use rand::Rng;
+
+	pub fn rangei(start: isize, end: isize) -> isize {
+		let mut rng = rand::thread_rng();
+		rng.gen_range(start, end)
+	}
+}
+
+pub fn print(msg: &str) {
+	println!("{}", msg);
+}
 
 pub struct Backend {
 	sdl: sdl2::Sdl,
@@ -36,7 +65,7 @@ macro_rules! match_keycodes {
 impl From<SdlKeycode> for Keycode {
 	fn from(sdl_keycode: SdlKeycode) -> Keycode {
 		match_keycodes!(sdl_keycode {
-			...(W, S, A, D, Q, E),
+			...(W, S, A, D, Q, E, Escape),
 			_ => Keycode::Unknown,
 		})
 	}

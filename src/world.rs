@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use crate::backend::random;
+use crate::prelude::*;
 
 use super::geometry::{self, vec3, Vector3};
 use super::window::InputState;
@@ -182,7 +182,8 @@ impl World {
 					let (ex, ey) = self.tile_index_at_position(position);
 					let (tile_frame_position, tx, ty) =
 						self.normalize_tile_index(position.frame, ex + 1, ey);
-					let frame = self.get_frame_mut(tile_frame_position).unwrap();
+					let frame =
+						self.get_frame_mut(tile_frame_position).unwrap();
 					*frame.tile_mut(tx, ty) = Tile::Solid;
 				}
 				Q => {
@@ -191,7 +192,8 @@ impl World {
 					let (ex, ey) = self.tile_index_at_position(position);
 					let (tile_frame_position, tx, ty) =
 						self.normalize_tile_index(position.frame, ex + 1, ey);
-					let frame = self.get_frame_mut(tile_frame_position).unwrap();
+					let frame =
+						self.get_frame_mut(tile_frame_position).unwrap();
 					*frame.tile_mut(tx, ty) = Tile::Empty;
 				}
 				_ => {}
@@ -487,12 +489,12 @@ impl World {
 		let real_frame_position = match borders.at_direction(direction) {
 			Some(p) => p,
 			None => {
-				eprintln!("Could not access tile index's real frame:");
-				eprintln!(
+				elog("Could not access tile index's real frame:");
+				elog(format!(
 					"{}/({},{}) -> {:?}",
 					origin_frame_position, x, y, direction
-				);
-				eprintln!("selecting from {}", borders);
+				));
+				elog(format!("selecting from {}", borders));
 				panic!("Tile index access error");
 			}
 		}
@@ -616,9 +618,9 @@ impl World {
 		let real_frame_position = match borders.at_direction(direction) {
 			Some(p) => p,
 			None => {
-				eprintln!("Could not access position's real frame:");
-				eprintln!("{:?} @ {:?}", position, direction);
-				eprintln!("selecting from {:?}", borders);
+				elog("Could not access position's real frame:");
+				elog(format!("{:?} @ {:?}", position, direction));
+				elog(format!("selecting from {:?}", borders));
 				panic!("Frame neighbor access error");
 			}
 		}
@@ -648,12 +650,12 @@ impl World {
 		let parent_frame = self.get_frame_mut(parent).unwrap();
 		let border = parent_frame.borders.at_direction_mut(parent_edge);
 		if border.is_some() {
-			eprintln!(
+			elog(format!(
 				"Attempt to create link to non-empty parent frame border:\n\
 				<{}>@{:?} <- {}@{:?}\n\
 				parent has: {}",
 				parent, parent_edge, child, child_edge, parent_frame.borders,
-			);
+			));
 			panic!("Non-empty frame border attachment");
 		}
 		*border = Some(FrameLink {
@@ -663,12 +665,12 @@ impl World {
 		let child_frame = self.get_frame_mut(child).unwrap();
 		let border = child_frame.borders.at_direction_mut(child_edge);
 		if border.is_some() {
-			eprintln!(
+			elog(format!(
 				"Attempt to create link to non-empty child frame border:\n\
 				<{}>@{:?} <- {}@{:?}\n\
 				child has: {}",
 				parent, parent_edge, child, child_edge, child_frame.borders,
-			);
+			));
 			panic!("Non-empty frame border attachment");
 		}
 		*border = Some(FrameLink {
@@ -843,11 +845,9 @@ impl Frame {
 	pub fn new_populated(position: FramePosition) -> Self {
 		let mut frame = Self::new(position);
 
-		let mut rng = rand::thread_rng();
-
 		for x in 0..FRAME_WIDTH {
 			for y in 0..FRAME_WIDTH {
-				let tile = match rng.gen_range(1, 100) {
+				let tile = match random::rangei(1, 100) {
 					1..=17 => Tile::Solid,
 					18..=100 => Tile::Empty,
 					_ => panic!(),

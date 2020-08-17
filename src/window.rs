@@ -1,10 +1,11 @@
-pub mod types;
-mod backend;
+pub mod backend;
 mod projection;
+pub mod types;
 
 use std::collections::HashSet;
 
 use backend::Backend;
+pub use backend::{begin_loop, external_exports};
 
 use super::world::{Direction, Entity, Frame, Tile, World, FRAME_WIDTH};
 use super::GameState;
@@ -98,7 +99,7 @@ impl Window {
 			let camera = Camera::new(position, rotation, fov_degrees);
 
 			let viewport_width = self.backend.viewport_width() as f32;
-			let viewport_height = self.backend.viewport_width() as f32;
+			let viewport_height = self.backend.viewport_height() as f32;
 
 			camera.projector(viewport_width, viewport_height)
 		};
@@ -164,7 +165,7 @@ impl Window {
 		let mut twist = 0.0;
 
 		if focus_y > 0.0 {
-			twist = (PI * 2.0) / 6.0;
+			//twist = (PI * 2.0) / 6.0;
 		}
 
 		//let twist = (self.tick as f32) / 300.0;
@@ -395,9 +396,6 @@ impl Window {
 				}
 			}
 		}
-
-		self.backend.draw_line((10.0, 10.0), (12.0, 12.0));
-		//self.backend.draw_line((10, 12), (12, 12));
 	}
 
 	fn draw_rect(

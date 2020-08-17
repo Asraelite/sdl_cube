@@ -5,5 +5,8 @@ authors = ["Asraelite <markusscully@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+lazy_static = "1.4.0"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 sdl2 = "0.34.2"
 rand = "0.7.3"

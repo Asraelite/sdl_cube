@@ -5,20 +5,33 @@ mod window;
 mod world;
 
 use geometry::{Scalar, Vector3};
-use window::{Window, InputState};
+use window::{InputState, Window};
 use world::World;
 
+pub use window::external_exports::*;
+pub use window::backend;
+
+#[macro_use]
+extern crate lazy_static;
+
 fn main() {
-	let mut window = Window::new();
-	let mut game_state = GameState::new();
+	window::begin_loop(
+		Window::new(),
+		GameState::new(),
+		move |window: &mut Window, game_state: &mut GameState| {
+			window.tick(game_state);
+			window.render(game_state);
+		},
+	);
+}
 
-	'main: loop {
-		window.tick(&mut game_state);
-		window.render(&mut game_state);
+mod prelude {
+	pub fn elog<T: std::borrow::Borrow<str> + std::fmt::Display>(msg: T) {
+		super::backend::print(msg.borrow());
+	}
 
-		if window.should_exit {
-			break 'main;
-		}
+	pub fn log<T: std::borrow::Borrow<str> + std::fmt::Display>(msg: T) {
+		super::backend::print(msg.borrow());
 	}
 }
 
@@ -28,9 +41,9 @@ pub struct GameState {
 
 impl GameState {
 	pub fn new() -> Self {
-		 Self {
-			 world: World::new(),
-		 }
+		Self {
+			world: World::new(),
+		}
 	}
 
 	pub fn tick(&mut self, input_state: &InputState) {
