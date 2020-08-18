@@ -7,78 +7,17 @@ use super::geometry::{self, vec3, Vector3};
 use super::window::InputState;
 use super::window::{Color, Keycode};
 
+mod types;
+pub use types::*;
+mod frame;
+pub use frame::{Frame, FrameLink};
+
 pub const FRAME_WIDTH: usize = 16;
 pub const TILE_SIZE: f32 = 2.0 / FRAME_WIDTH as f32;
 const FRAME_TILE_COUNT: usize = FRAME_WIDTH * FRAME_WIDTH;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub struct Contacts {
-	top_left: bool,
-	top_right: bool,
-	bottom_left: bool,
-	bottom_right: bool,
-}
-
-impl Contacts {
-	pub fn as_tuple(&self) -> (bool, bool, bool, bool) {
-		(
-			self.top_left,
-			self.top_right,
-			self.bottom_left,
-			self.bottom_right,
-		)
-	}
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum Direction {
-	Up,
-	Down,
-	Left,
-	Right,
-	Neutral,
-}
-
-impl Direction {
-	pub fn reverse(&self) -> Self {
-		use Direction::*;
-		match self {
-			Up => Down,
-			Down => Up,
-			Left => Right,
-			Right => Left,
-			Neutral => Neutral,
-		}
-	}
-
-	pub fn iter<'a>() -> impl std::iter::Iterator<Item = &'a Self> {
-		use Direction::*;
-		[Up, Down, Left, Right, Neutral].iter()
-	}
-
-	pub fn rotated(&self, turns: isize) -> Self {
-		use Direction::*;
-		match (*self, turns.rem_euclid(4)) {
-			(current, 0) => current,
-			(Up, 1) => Right,
-			(Up, 2) => Down,
-			(Up, 3) => Left,
-			(Right, 1) => Down,
-			(Right, 2) => Left,
-			(Right, 3) => Up,
-			(Down, 1) => Left,
-			(Down, 2) => Up,
-			(Down, 3) => Right,
-			(Left, 1) => Up,
-			(Left, 2) => Right,
-			(Left, 3) => Down,
-			_ => unreachable!(),
-		}
-	}
-}
-
 pub struct World {
-	frames: HashMap<FramePosition, Frame>,
+	frames: HashMap<FrameId, Frame>,
 	entities: HashMap<EntityId, Entity>,
 	pub focus_entity: Option<EntityId>,
 	iota: usize,
@@ -93,57 +32,55 @@ impl World {
 			iota: 0,
 		};
 
-		let start_frame = Frame::new_populated(FramePosition::new(0));
-		let start_frame_position = start_frame.position;
-		world.frames.insert(start_frame.position, start_frame);
+		let front = Frame::new_populated(FrameId::new(0));
+		let front_id = world.insert_frame(front);
 
-		let u_test_frame = Frame::new_populated(FramePosition::new(69));
-		let u_test_frame_position = u_test_frame.position;
-		world.frames.insert(u_test_frame.position, u_test_frame);
+		let left = Frame::new_populated(FrameId::new(1));
+		let left_id = world.insert_frame(left);
 
-		let d_test_frame = Frame::new_populated(FramePosition::new(711));
-		let d_test_frame_position = d_test_frame.position;
-		world.frames.insert(d_test_frame.position, d_test_frame);
+		let right = Frame::new_populated(FrameId::new(2));
+		let right_id = world.insert_frame(right);
 
-		let r_test_frame = Frame::new_populated(FramePosition::new(420));
-		let r_test_frame_position = r_test_frame.position;
-		world.frames.insert(r_test_frame.position, r_test_frame);
+		let up = Frame::new_populated(FrameId::new(3));
+		let up_id = world.insert_frame(up);
 
-		world.attach_frame(
-			start_frame_position,
-			u_test_frame_position,
-			Direction::Up,
-			Direction::Down,
-		);
+		let down = Frame::new_populated(FrameId::new(4));
+		let down_id = world.insert_frame(down);
 
-		world.attach_frame(
-			start_frame_position,
-			r_test_frame_position,
-			Direction::Right,
-			Direction::Left,
-		);
+		let back = Frame::new_populated(FrameId::new(5));
+		let back_id = world.insert_frame(back);
 
-		world.attach_frame(
-			r_test_frame_position,
-			u_test_frame_position,
-			Direction::Up,
-			Direction::Right,
-		);
+		use Direction::*;
 
-		world.attach_frame(
-			start_frame_position,
-			d_test_frame_position,
-			Direction::Down,
-			Direction::Up,
-		);
+		world.connect_frames(front_id, Up, up_id, Down);
+		world.connect_frames(front_id, Left, left_id, Right);
+		world.connect_frames(front_id, Right, right_id, Left);
+		world.connect_frames(front_id, Down, down_id, Up);
 
-		let player = Entity::new_player(&mut world, start_frame_position);
+		world.connect_frames(back_id, Up, up_id, Up);
+		world.connect_frames(back_id, Right, left_id, Left);
+		world.connect_frames(back_id, Left, right_id, Right);
+		world.connect_frames(back_id, Down, down_id, Down);
+
+		world.connect_frames(left_id, Up, up_id, Left);
+		world.connect_frames(left_id, Down, down_id, Right);
+
+		world.connect_frames(right_id, Up, up_id, Right);
+		world.connect_frames(right_id, Down, down_id, Left);
+
+		let player = Entity::new_player(&mut world, front_id);
 		let player_id = player.id;
 		world.entities.insert(player.id, player);
 
 		world.focus_entity = Some(player_id);
 
 		world
+	}
+
+	fn insert_frame(&mut self, frame: Frame) -> FrameId {
+		let id = frame.position;
+		self.frames.insert(id, frame);
+		id
 	}
 
 	pub fn tick(&mut self, input_state: &InputState) {
@@ -180,8 +117,8 @@ impl World {
 					let entity = self.get_entity(player_id).unwrap();
 					let mut position = entity.position;
 					let (ex, ey) = self.tile_index_at_position(position);
-					let (tile_frame_position, tx, ty) =
-						self.normalize_tile_index(position.frame, ex + 1, ey);
+					let (tile_frame_position, tx, ty) = self
+						.normalize_tile_index(position.frame_id, ex + 1, ey);
 					let frame =
 						self.get_frame_mut(tile_frame_position).unwrap();
 					*frame.tile_mut(tx, ty) = Tile::Solid;
@@ -190,8 +127,8 @@ impl World {
 					let entity = self.get_entity(player_id).unwrap();
 					let mut position = entity.position;
 					let (ex, ey) = self.tile_index_at_position(position);
-					let (tile_frame_position, tx, ty) =
-						self.normalize_tile_index(position.frame, ex + 1, ey);
+					let (tile_frame_position, tx, ty) = self
+						.normalize_tile_index(position.frame_id, ex + 1, ey);
 					let frame =
 						self.get_frame_mut(tile_frame_position).unwrap();
 					*frame.tile_mut(tx, ty) = Tile::Empty;
@@ -394,7 +331,7 @@ impl World {
 			// }
 		}
 
-		let normalized_position = self.normalize_position(position);
+		let normalized_position = position.normalize(self);
 		let entity = self.get_entity_mut(id).unwrap();
 		entity.position = normalized_position;
 		entity.velocity = velocity;
@@ -434,7 +371,7 @@ impl World {
 	}
 
 	pub fn tile_at_position(&self, position: WorldPosition) -> Tile {
-		let frame_position = position.frame;
+		let frame_position = position.frame_id;
 		let frame = self.get_frame(frame_position).unwrap();
 		let (tx, ty) = self.tile_index_at_position(position);
 		*frame.tile(tx, ty)
@@ -459,10 +396,10 @@ impl World {
 
 	pub fn normalize_tile_index(
 		&self,
-		origin_frame_position: FramePosition,
+		origin_frame_position: FrameId,
 		x: isize,
 		y: isize,
-	) -> (FramePosition, isize, isize) {
+	) -> (FrameId, isize, isize) {
 		let origin_frame = self.get_frame(origin_frame_position).unwrap();
 		let borders = origin_frame.borders;
 
@@ -519,8 +456,8 @@ impl World {
 	}
 
 	fn point_contacts(&mut self, position: WorldPosition) -> Contacts {
-		let frame = self.get_frame(position.frame).unwrap();
-		let position = self.normalize_position(position);
+		let frame = self.get_frame(position.frame_id).unwrap();
+		let position = position.normalize(self);
 
 		let f = FRAME_WIDTH as f32 / 2.0;
 		let tile_x_left = (((position.x + 1.0) * f).ceil() - 1.0) as isize;
@@ -530,7 +467,7 @@ impl World {
 
 		let is_solid = |x, y| {
 			let (tile_frame_pos, wrapped_x, wrapped_y) =
-				self.normalize_tile_index(position.frame, x, y);
+				self.normalize_tile_index(position.frame_id, x, y);
 			let tile_frame = self.get_frame(tile_frame_pos).unwrap();
 			let tile = tile_frame.tile(wrapped_x, wrapped_y);
 			tile.is_solid()
@@ -580,71 +517,22 @@ impl World {
 		self.entities.get_mut(&entity_id)
 	}
 
-	pub fn get_frame(&self, frame_position: FramePosition) -> Option<&Frame> {
+	pub fn get_frame(&self, frame_position: FrameId) -> Option<&Frame> {
 		self.frames.get(&frame_position)
 	}
 
 	pub fn get_frame_mut(
 		&mut self,
-		frame_position: FramePosition,
+		frame_position: FrameId,
 	) -> Option<&mut Frame> {
 		self.frames.get_mut(&frame_position)
 	}
 
-	pub fn normalize_position(&self, position: WorldPosition) -> WorldPosition {
-		let origin_frame = self.get_frame(position.frame).unwrap();
-
-		let borders = origin_frame.borders;
-		let (x, y) = (position.x, position.y);
-
-		if (x >= 1.0 || x < -1.0) && (y >= 1.0 || y < -1.0)
-			|| (x > 2.0 || x <= -2.0 || y > 2.0 || y <= -2.0)
-		{
-			panic!(
-				"Position exists outside its own frame \
-				and orthgonally neighboring frames"
-			);
-		}
-
-		use Direction::*;
-		let (direction, real_x, real_y) = match (x, y) {
-			(x, y) if (x >= 1.0) => (Right, x - 2.0, y),
-			(x, y) if (x < -1.0) => (Left, x + 2.0, y),
-			(x, y) if (y >= 1.0) => (Down, x, y - 2.0),
-			(x, y) if (y < -1.0) => (Up, x, y + 2.0),
-			(x, y) => (Neutral, x, y),
-		};
-
-		let real_frame_position = match borders.at_direction(direction) {
-			Some(p) => p,
-			None => {
-				elog("Could not access position's real frame:");
-				elog(format!("{:?} @ {:?}", position, direction));
-				elog(format!("selecting from {:?}", borders));
-				panic!("Frame neighbor access error");
-			}
-		}
-		.frame;
-
-		// let real_frame_position = match borders.at_direction(direction) {
-		// 	Some(p) => p,
-		// 	None => FramePosition::invalid(),
-		// };
-
-		let real_world_position = WorldPosition {
-			frame: real_frame_position,
-			x: real_x,
-			y: real_y,
-		};
-
-		real_world_position
-	}
-
-	fn attach_frame(
+	fn connect_frames(
 		&mut self,
-		parent: FramePosition,
-		child: FramePosition,
+		parent: FrameId,
 		parent_edge: Direction,
+		child: FrameId,
 		child_edge: Direction,
 	) {
 		let parent_frame = self.get_frame_mut(parent).unwrap();
@@ -680,194 +568,6 @@ impl World {
 	}
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub struct EntityId(usize);
-
-// TODO: Rename to FrameId
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct FramePosition(usize);
-
-impl std::fmt::Display for FramePosition {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "[{}]", self.0)?;
-		Ok(())
-	}
-}
-
-impl FramePosition {
-	pub fn new(inner: usize) -> Self {
-		Self(inner)
-	}
-
-	pub fn invalid() -> Self {
-		Self(std::usize::MAX)
-	}
-}
-
-#[derive(Copy, Clone, PartialEq)]
-pub enum Tile {
-	Empty,
-	Solid,
-	Invalid,
-}
-
-impl Tile {
-	pub fn is_solid(&self) -> bool {
-		use Tile::*;
-		match *self {
-			Empty => false,
-			Solid => true,
-			Invalid => true,
-		}
-	}
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct FrameLinks {
-	up: Option<FrameLink>,
-	down: Option<FrameLink>,
-	left: Option<FrameLink>,
-	right: Option<FrameLink>,
-	neutral: Option<FrameLink>,
-}
-
-impl std::fmt::Display for FrameLinks {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let inner_string = [
-			(/*"←"*/ Direction::Left, self.left),
-			(/*"→"*/ Direction::Right, self.right),
-			(/*"↑"*/ Direction::Up, self.up),
-			(/*"↓"*/ Direction::Down, self.down),
-		]
-		.iter()
-		.filter(|(_, value)| value.is_some())
-		.map(|(symbol, value)| format!("{:?}:{}", symbol, value.unwrap().frame))
-		.collect::<Vec<String>>()
-		.join(", ");
-
-		write!(f, "links( {} )", inner_string)?;
-		Ok(())
-	}
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct FrameLink {
-	pub frame: FramePosition,
-	pub entry_edge: Direction,
-}
-
-impl std::fmt::Display for FrameLink {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "~({}@{:?})", self.frame, self.entry_edge)?;
-		Ok(())
-	}
-}
-
-impl FrameLinks {
-	pub fn at_direction(&self, direction: Direction) -> Option<FrameLink> {
-		use Direction::*;
-		match direction {
-			Up => self.up,
-			Down => self.down,
-			Left => self.left,
-			Right => self.right,
-			Neutral => self.neutral,
-		}
-	}
-
-	pub fn at_direction_mut(
-		&mut self,
-		direction: Direction,
-	) -> &mut Option<FrameLink> {
-		use Direction::*;
-		match direction {
-			Up => &mut self.up,
-			Down => &mut self.down,
-			Left => &mut self.left,
-			Right => &mut self.right,
-			Neutral => &mut self.neutral,
-		}
-	}
-}
-
-pub struct Frame {
-	tiles: [Tile; FRAME_TILE_COUNT],
-	invalid_tile: Tile,
-	pub borders: FrameLinks,
-	pub position: FramePosition,
-	pub orientation: Direction,
-}
-
-impl Frame {
-	pub fn new(position: FramePosition) -> Self {
-		let borders = FrameLinks {
-			up: None,
-			down: None,
-			left: None,
-			right: None,
-			neutral: Some(FrameLink {
-				frame: position,
-				entry_edge: Direction::Neutral,
-			}),
-		};
-
-		Self {
-			tiles: [Tile::Empty; FRAME_TILE_COUNT],
-			invalid_tile: Tile::Invalid,
-			borders,
-			position,
-			orientation: Direction::Neutral,
-		}
-	}
-
-	pub fn tile(&self, x: isize, y: isize) -> &Tile {
-		if x < 0
-			|| y < 0 || x >= FRAME_WIDTH as isize
-			|| y >= FRAME_WIDTH as isize
-		{
-			return &Tile::Invalid;
-		}
-
-		&self.tiles[y as usize * FRAME_WIDTH + x as usize]
-	}
-
-	pub fn tile_mut(&mut self, x: isize, y: isize) -> &mut Tile {
-		if x < 0
-			|| y < 0 || x >= FRAME_WIDTH as isize
-			|| y >= FRAME_WIDTH as isize
-		{
-			return &mut self.invalid_tile;
-		}
-
-		&mut self.tiles[y as usize * FRAME_WIDTH + x as usize]
-	}
-
-	pub fn new_populated(position: FramePosition) -> Self {
-		let mut frame = Self::new(position);
-
-		for x in 0..FRAME_WIDTH {
-			for y in 0..FRAME_WIDTH {
-				let tile = match random::rangei(1, 100) {
-					1..=17 => Tile::Solid,
-					18..=100 => Tile::Empty,
-					_ => panic!(),
-				};
-
-				*frame.tile_mut(x as isize, y as isize) = tile;
-			}
-		}
-
-		frame
-	}
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct WorldPosition {
-	pub frame: FramePosition,
-	pub x: f32,
-	pub y: f32,
-}
-
 pub struct Entity {
 	pub position: WorldPosition,
 	pub velocity: Vector3,
@@ -882,21 +582,14 @@ pub struct Entity {
 }
 
 impl Entity {
-	pub fn new_player(world: &mut World, frame: FramePosition) -> Self {
+	pub fn new_player(world: &mut World, frame_id: FrameId) -> Self {
 		let position = WorldPosition {
-			frame,
+			frame_id,
 			x: 0.3,
 			y: 0.1,
 		};
 
 		let id = EntityId(world.generate_id());
-
-		// let contacts = Contacts {
-		// 	above: false,
-		// 	below: false,
-		// 	left: false,
-		// 	right: false,
-		// };
 
 		Self {
 			position,

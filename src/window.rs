@@ -157,7 +157,7 @@ impl Window {
 		//let r = r.rotated(0.0, 0.0, 0.5);
 		//let r =
 
-		let focus_frame = world.get_frame(focus_position.frame).unwrap();
+		let focus_frame = world.get_frame(focus_position.frame_id).unwrap();
 		let neighbors = focus_frame.borders;
 
 		let view_rotation = Matrix4x4::rotation(r.x, r.y, r.z);
@@ -197,7 +197,7 @@ impl Window {
 
 		for entity_id in world.entity_ids() {
 			let entity = world.get_entity(entity_id).unwrap();
-			let frame = entity.position.frame;
+			let frame = entity.position.frame_id;
 			self.draw_entity(
 				projector,
 				entity,
